@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Unicorn Fast Cleaner Lite
 // @namespace    local.unicorn.fastcleaner
-// @version      1.1.0
+// @version      1.2.0
 // @description  Lightweight banner/popup cleanup and preroll skip for Unicorn Pro
 // @match        http://*/*
 // @match        https://*/*
@@ -100,13 +100,73 @@
     }
   }
 
+  function hideDirect(el) {
+    if (!el || el.nodeType !== 1 || protectedZone(el) || isPlayer(el)) return false;
+    el.style.setProperty('display', 'none', 'important');
+    el.style.setProperty('height', '0', 'important');
+    el.style.setProperty('min-height', '0', 'important');
+    el.style.setProperty('max-height', '0', 'important');
+    el.style.setProperty('margin', '0', 'important');
+    el.style.setProperty('padding', '0', 'important');
+    el.setAttribute('data-ufc-hidden', '1');
+    return true;
+  }
+
+  function dismissControl(el) {
+    if (!el || el.nodeType !== 1) return false;
+    var t = txt(el);
+    return !!(t && t.length <= 100 && (DISMISS.test(t) || CLOSE.test(t)));
+  }
+
+  function shellIsEmpty(p) {
+    if (!p || !p.children || protectedZone(p) || isPlayer(p)) return false;
+    if (p.children.length > 14) return false;
+
+    var own = '';
+    try {
+      for (var n = 0; n < p.childNodes.length; n++) {
+        if (p.childNodes[n].nodeType === 3) own += p.childNodes[n].textContent || '';
+      }
+    } catch (e) {}
+
+    own = own.replace(/\s+/g, ' ').trim();
+    if (own && !DISMISS.test(own) && !CLOSE.test(own)) return false;
+
+    for (var i = 0; i < p.children.length; i++) {
+      var ch = p.children[i];
+      if (!ch || ch.hasAttribute('data-ufc-hidden') || !visible(ch)) continue;
+      if (dismissControl(ch)) continue;
+
+      var tag = (ch.tagName || '').toLowerCase();
+      if ((tag === 'img' || tag === 'iframe') && strongAdSignal(ch)) continue;
+
+      var controls = ch.querySelectorAll ? ch.querySelectorAll('button,a,[role="button"],input[type="button"],input[type="submit"]') : [];
+      var allDismiss = controls.length > 0 && controls.length <= 6;
+      for (var k = 0; k < controls.length && allDismiss; k++) {
+        if (!dismissControl(controls[k])) allDismiss = false;
+      }
+      if (allDismiss && txt(ch).length <= 180) continue;
+
+      return false;
+    }
+
+    return true;
+  }
+
+  function collapseEmptyNear(el) {
+    for (var p = el && el.parentElement, i = 0; p && p !== BODY() && p !== DOC() && i < 4; p = p.parentElement, i++) {
+      if (protectedZone(p) || isPlayer(p)) break;
+      if (!shellIsEmpty(p)) break;
+      hideDirect(p);
+    }
+  }
+
   function hide(el) {
     if (!el || el.nodeType !== 1 || protectedZone(el)) return;
     var target = el;
     var a = el.closest && el.closest('a[href]');
     if (a && !protectedZone(a)) target = a;
-    target.style.setProperty('display', 'none', 'important');
-    target.setAttribute('data-ufc-hidden', '1');
+    if (hideDirect(target)) collapseEmptyNear(target);
   }
 
   function strongAdSignal(el) {
@@ -190,6 +250,48 @@
     if (b) b.style.setProperty('overflow', 'auto', 'important');
   }
 
+  function cleanupDismissControl(el) {
+    if (!dismissControl(el) || protectedZone(el) || isPlayer(el)) return false;
+
+    var baseText = txt(el);
+    var isDismiss = DISMISS.test(baseText);
+    var isClose = CLOSE.test(baseText);
+
+    for (var p = el.parentElement, i = 0; p && p !== BODY() && p !== DOC() && i < 5; p = p.parentElement, i++) {
+      if (protectedZone(p) || isPlayer(p)) return false;
+
+      var r = rect(p);
+      if (r.w < 90 || r.h < 30 || r.h > Math.max(620, innerHeight * 0.75)) continue;
+
+      var cs = getComputedStyle(p);
+      var z = parseInt(cs.zIndex, 10) || 0;
+      var m = ((p.id || '') + ' ' + String(p.className || '') + ' ' + ((p.getAttribute && p.getAttribute('role')) || '')).toLowerCase();
+      var floaty = cs.position === 'fixed' || cs.position === 'sticky' || (cs.position === 'absolute' && z >= 1);
+      var metaPopup = /(popup|modal|dialog|layer|notice|float|floating|advert|banner|(^|[-_\s])ad([-_\s]|$))/i.test(m);
+      var visual = !!(p.querySelector && p.querySelector('img,picture,iframe,svg,canvas'));
+
+      var controls = p.querySelectorAll ? p.querySelectorAll('button,a,[role="button"],input[type="button"],input[type="submit"]') : [];
+      var dismissCount = 0;
+      for (var k = 0; k < controls.length && k < 12; k++) {
+        if (dismissControl(controls[k])) dismissCount++;
+      }
+
+      var pairedDismiss = isDismiss && dismissCount >= 2 && controls.length <= 8;
+      var floatingClose = isClose && floaty && (visual || metaPopup);
+      var popupDismiss = isDismiss && (floaty || metaPopup) && (visual || dismissCount >= 1);
+
+      if (pairedDismiss || floatingClose || popupDismiss) {
+        if (hideDirect(p)) {
+          collapseEmptyNear(p);
+          unlockPage();
+        }
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   function killPopupFrom(el) {
     if (!el || el.nodeType !== 1 || isPlayer(el)) return false;
 
@@ -201,6 +303,8 @@
       unlockPage();
       return true;
     }
+
+    if (cleanupDismissControl(el)) return true;
 
     var t = txt(el);
     if (!t || t.length > 240 || !DISMISS.test(t)) return false;
@@ -223,7 +327,7 @@
     killPopupFrom(root);
     if (!root.querySelectorAll) return;
 
-    var nodes = root.querySelectorAll('#hd_pop,[id^="hd_pops_"],.hd_pops,[role="dialog"],[role="alertdialog"],[class*="popup" i],[id*="popup" i],[class*="modal" i],[id*="modal" i],button,a,[role="button"]');
+    var nodes = root.querySelectorAll('#hd_pop,[id^="hd_pops_"],.hd_pops,[role="dialog"],[role="alertdialog"],[class*="popup" i],[id*="popup" i],[class*="modal" i],[id*="modal" i],button,a,[role="button"],input[type="button"],input[type="submit"],[class*="close" i],[id*="close" i]');
     for (var i = 0; i < nodes.length && i < 80; i++) killPopupFrom(nodes[i]);
   }
 
