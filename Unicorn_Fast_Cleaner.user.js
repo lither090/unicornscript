@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Unicorn Fast Cleaner Lite
 // @namespace    local.unicorn.fastcleaner
-// @version      1.2.6
+// @version      1.2.8
 // @description  Lightweight banner/popup cleanup and preroll skip for Unicorn Pro
 // @match        http://*/*
 // @match        https://*/*
