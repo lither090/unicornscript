@@ -3,7 +3,7 @@ name: Build UFC App Probe APK
 on:
   push:
     paths:
-      - 'android-app-probe/source.zip.b64'
+      - 'android-app-probe-shizuku/source.zip.b64'
       - '.github/workflows/build-ufc-app-probe.yml'
   workflow_dispatch:
 
@@ -19,9 +19,9 @@ jobs:
 
       - name: Restore source bundle
         run: |
-          base64 -d android-app-probe/source.zip.b64 > /tmp/UFC-App-Probe-source.zip
+          base64 -d android-app-probe-shizuku/source.zip.b64 > /tmp/UFC-App-Probe-source.zip
           unzip -q /tmp/UFC-App-Probe-source.zip -d /tmp/ufc-src
-          ls -la /tmp/ufc-src/UFC-App-Probe
+          ls -la /tmp/ufc-src/UFC-App-Probe-Shizuku
 
       - name: Set up Java 17
         uses: actions/setup-java@v5
@@ -44,15 +44,15 @@ jobs:
           gradle-version: '8.10.2'
 
       - name: Build debug APK
-        working-directory: /tmp/ufc-src/UFC-App-Probe
+        working-directory: /tmp/ufc-src/UFC-App-Probe-Shizuku
         run: gradle :app:assembleDebug --stacktrace
 
       - name: Prepare APK
-        run: cp /tmp/ufc-src/UFC-App-Probe/app/build/outputs/apk/debug/app-debug.apk /tmp/UFC-App-Probe.apk
+        run: cp /tmp/ufc-src/UFC-App-Probe-Shizuku/app/build/outputs/apk/debug/app-debug.apk /tmp/UFC-App-Probe-Shizuku-0.2.0.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: UFC-App-Probe-debug
-          path: /tmp/UFC-App-Probe.apk
+          name: UFC-App-Probe-Shizuku-0.2.0
+          path: /tmp/UFC-App-Probe-Shizuku-0.2.0.apk
           if-no-files-found: error
