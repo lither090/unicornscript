@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Unicorn Fast Cleaner Lite
 // @namespace    local.unicorn.fastcleaner
-// @version      1.5.11
+// @version      1.5.12
 // @description  Conservative structural banner/popup cleanup and preroll skip for Unicorn Pro
 // @match        http://*/*
 // @match        https://*/*
@@ -112,8 +112,31 @@ function scanExplicitAds(root) {
     if (shell) hideDirect(shell);
   }
 }
+function dominantBannerMedia(a) {
+  if (!a || !a.querySelectorAll) return false;
+  var ar = rect(a);
+  if (ar.w < 100 || ar.h < 24 || ar.w > 1200 || ar.h > 600) return false;
+  var media = [];
+  try { media = a.querySelectorAll('img,picture img,video,canvas'); } catch (e) { return false; }
+  for (var i = 0; i < media.length && i < 10; i++) {
+    var rr = rect(media[i]);
+    if (rr.w < 90 || rr.h < 20 || rr.h > 260) continue;
+    var areaRatio = (rr.w * rr.h) / Math.max(1, ar.w * ar.h);
+    var fillsAnchor = rr.w >= ar.w * .78 && rr.h >= ar.h * .58;
+    var bannerShape = rr.q >= 2.2 || (rr.w >= ar.w * .9 && rr.h >= 28);
+    if (bannerShape && (areaRatio >= .55 || fillsAnchor)) return true;
+  }
+  return false;
+}
 function redirectAdShell(a) {
   if (!a || !sameSiteAdRedirect(a) || protectedZone(a) || isPlayer(a)) return null;
+
+  // A same-site /go or /redirect URL is not enough by itself.
+  // Many link directories use those routes for normal content cards.
+  // Only treat it as an ad when the link is visually a banner creative
+  // (or has an explicit ad signal). Small icons + text/list cards are preserved.
+  if (!explicitAdSignal(a) && !dominantBannerMedia(a)) return null;
+
   var ar = rect(a);
   if (ar.w < 100 || ar.h < 24 || ar.w > 900 || ar.h > 500) return null;
   var best = a;
