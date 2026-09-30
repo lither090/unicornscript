@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Unicorn Fast Cleaner Lite
 // @namespace    local.unicorn.fastcleaner
-// @version      1.5.3
+// @version      1.5.4
 // @description  Conservative structural banner/popup cleanup and preroll skip for Unicorn Pro
 // @match        http://*/*
 // @match        https://*/*
@@ -136,7 +136,7 @@ function structuralBannerShell(el) {
   if (best) return best;
 
   var im = meta(el);
-  if (/(^|[\/._-])banner(?:[\/._-]|\d|$)/i.test(im)) {
+  if (/(^|[\/._-])banners?(?:[\/._-]|\d|$)/i.test(im)) {
     var ar = rect(a);
     if (ar.w >= 110 && ar.h >= 30 && ar.h <= 500) return a;
   }
