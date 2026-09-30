@@ -1,19 +1,21 @@
 // ==UserScript==
 // @name         Unicorn Fast Cleaner Lite
 // @namespace    local.unicorn.fastcleaner
-// @version      1.2.0
+// @version      1.2.1
 // @description  Lightweight banner/popup cleanup and preroll skip for Unicorn Pro
 // @match        http://*/*
 // @match        https://*/*
 // @run-at       document-start
 // @grant        none
+// @downloadURL  https://raw.githubusercontent.com/lither090/unicornscript/main/Unicorn_Fast_Cleaner.user.js
+// @updateURL    https://raw.githubusercontent.com/lither090/unicornscript/main/Unicorn_Fast_Cleaner.user.js
 // ==/UserScript==
 
 (function () {
   'use strict';
 
   var D = document;
-  var W = window;
+  var W = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
   var DOC = function () { return D.documentElement; };
   var BODY = function () { return D.body; };
 
@@ -23,8 +25,16 @@
   var AD_MARKER = /(advertisement|skip\s*ad(?:\s*in)?\s*\d+|광고\s*(?:skip|스킵)|\d+\s*초\s*(?:뒤|후)\s*광고)/i;
   var UNAVAILABLE = /^\s*사용\s*불가\s*$/i;
 
+  var styleRetry = 0;
   function addStyle() {
-    if (D.getElementById('__ufc_lite_css')) return;
+    if (D.getElementById('__ufc_lite_css')) return true;
+
+    var root = D.documentElement || D.head;
+    if (!root) {
+      if (styleRetry++ < 60) setTimeout(addStyle, 0);
+      return false;
+    }
+
     var s = D.createElement('style');
     s.id = '__ufc_lite_css';
     s.textContent =
@@ -36,7 +46,15 @@
       '#hd_pop,[id^="hd_pops_"],[class~="hd_pops"],[class*="hd_pops_" i],' +
       'iframe[src*="doubleclick" i],iframe[src*="googlesyndication" i],iframe[src*="googleads" i]' +
       '{display:none!important;visibility:hidden!important;}';
-    (D.documentElement || D.head || D).appendChild(s);
+
+    try {
+      root.appendChild(s);
+      root.setAttribute('data-ufc-running', '1');
+      return true;
+    } catch (e) {
+      if (styleRetry++ < 60) setTimeout(addStyle, 0);
+      return false;
+    }
   }
 
   addStyle();
