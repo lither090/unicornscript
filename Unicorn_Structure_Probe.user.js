@@ -1,0 +1,34 @@
+// ==UserScript==
+// @name         Unicorn Structure Probe
+// @namespace    local.unicorn.structureprobe
+// @version      0.1.0
+// @description  One-click structural probe for troublesome ads/popups/prerolls. Exports sanitized JSON only.
+// @match        http://*/*
+// @match        https://*/*
+// @run-at       document-start
+// @grant        none
+// @downloadURL  https://raw.githubusercontent.com/lither090/unicornscript/main/Unicorn_Structure_Probe.user.js
+// @updateURL    https://raw.githubusercontent.com/lither090/unicornscript/main/Unicorn_Structure_Probe.user.js
+// ==/UserScript==
+(function(){'use strict';
+var D=document,W=window,armed=false,btn=null,hover=null,lastEl=null;
+function safeUrl(v){if(!v)return'';try{var u=new URL(v,location.href),keys=[];u.searchParams.forEach(function(_,k){if(keys.indexOf(k)<0)keys.push(k)});return u.origin+u.pathname+(keys.length?'?{'+keys.slice(0,12).join(',')+'}':'')}catch(e){return String(v).slice(0,300)}}
+function txt(el){try{return((el.innerText||el.textContent||'').replace(/\s+/g,' ').trim()).slice(0,600)}catch(e){return''}}
+function rect(el){try{var r=el.getBoundingClientRect();return{left:Math.round(r.left),top:Math.round(r.top),width:Math.round(r.width),height:Math.round(r.height),right:Math.round(r.right),bottom:Math.round(r.bottom)}}catch(e){return null}}
+function attrs(el){var out={};if(!el||!el.attributes)return out;for(var i=0;i<el.attributes.length;i++){var a=el.attributes[i],n=a.name,v=a.value;if(/^(value|nonce|integrity|crossorigin)$/i.test(n))continue;if(/^(href|src|poster|data-src|data-url|data-href|data-link|action)$/i.test(n))v=safeUrl(v);else if(/^on/i.test(n))v=String(v).replace(/https?:\/\/[^\s"'<>]+/gi,function(x){return safeUrl(x)}).slice(0,500);else v=String(v).slice(0,500);out[n]=v}return out}
+function styleInfo(el){try{var s=getComputedStyle(el);return{display:s.display,visibility:s.visibility,opacity:s.opacity,position:s.position,zIndex:s.zIndex,pointerEvents:s.pointerEvents,overflow:s.overflow,overflowX:s.overflowX,overflowY:s.overflowY,backgroundImage:s.backgroundImage&&s.backgroundImage!=='none'?String(s.backgroundImage).replace(/url\(["']?([^"')]+)["']?\)/g,function(_,u){return'url('+safeUrl(u)+')'}).slice(0,500):'none',cursor:s.cursor,transform:s.transform}}catch(e){return null}}
+function brief(el){if(!el||el.nodeType!==1)return null;return{tag:el.tagName,id:el.id||'',class:String(el.className||'').slice(0,500),role:el.getAttribute('role')||'',text:txt(el),attrs:attrs(el),rect:rect(el),style:styleInfo(el)}}
+function childSummary(root,sel,limit){var out=[];if(!root||!root.querySelectorAll)return out;var q=root.querySelectorAll(sel);for(var i=0;i<q.length&&i<limit;i++)out.push(brief(q[i]));return out}
+function ancestors(el){var out=[];for(var p=el,i=0;p&&p.nodeType===1&&i<8;p=p.parentElement,i++)out.push(brief(p));return out}
+function siblings(el){var out=[];if(!el||!el.parentElement)return out;var q=el.parentElement.children;for(var i=0;i<q.length&&i<20;i++){if(q[i]===el)continue;out.push(brief(q[i]))}return out}
+function topAt(el){var r=el&&el.getBoundingClientRect?el.getBoundingClientRect():null;if(!r)return[];var x=Math.max(0,Math.min(innerWidth-1,r.left+r.width/2)),y=Math.max(0,Math.min(innerHeight-1,r.top+r.height/2));var arr=[];try{var st=D.elementsFromPoint?D.elementsFromPoint(x,y):[D.elementFromPoint(x,y)];for(var i=0;i<st.length&&i<12;i++)arr.push(brief(st[i]))}catch(e){}return arr}
+function frameInfo(){var topUrl='';try{topUrl=top.location.href}catch(e){topUrl='cross-origin'}return{frameUrl:safeUrl(location.href),topUrl:topUrl==='cross-origin'?topUrl:safeUrl(topUrl),isTop:W===top}}
+function videoInfo(root){var out=[];var scope=root&&root.querySelectorAll?root:D;var q=scope.querySelectorAll('video');for(var i=0;i<q.length&&i<10;i++){var v=q[i];out.push({tag:'VIDEO',attrs:attrs(v),rect:rect(v),style:styleInfo(v),currentSrc:safeUrl(v.currentSrc||''),src:safeUrl(v.src||''),duration:isFinite(v.duration)?v.duration:null,currentTime:isFinite(v.currentTime)?v.currentTime:null,readyState:v.readyState,networkState:v.networkState,paused:v.paused,ended:v.ended,muted:v.muted,autoplay:v.autoplay,controls:v.controls,poster:safeUrl(v.poster||'')})}return out}
+function probe(el){var payload={probeVersion:'0.1.0',capturedAt:new Date().toISOString(),page:{url:safeUrl(location.href),title:D.title.slice(0,200),frame:frameInfo()},target:brief(el),ancestors:ancestors(el),siblings:siblings(el),topmostAtTargetCenter:topAt(el),nearby:{anchors:childSummary(el.closest('body')||D,'a[href]',40),images:childSummary(el.closest('body')||D,'img,picture',60),iframes:childSummary(el.closest('body')||D,'iframe',20),buttons:childSummary(el.closest('body')||D,'button,[role="button"],input[type="button"],input[type="submit"]',40),videos:videoInfo(el.closest('body')||D)},targetDescendants:{anchors:childSummary(el,'a[href]',30),images:childSummary(el,'img,picture',40),iframes:childSummary(el,'iframe',10),buttons:childSummary(el,'button,[role="button"],input[type="button"],input[type="submit"]',30),videos:videoInfo(el)}};download(payload)}
+function download(obj){try{var blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'}),a=D.createElement('a');a.href=URL.createObjectURL(blob);a.download='ufc-probe-'+location.hostname.replace(/[^a-z0-9.-]/gi,'_')+'-'+Date.now()+'.json';(D.body||D.documentElement).appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500)}catch(e){alert('UFC Probe export failed: '+e.message)}}
+function mark(el,on){if(lastEl&&lastEl!==el)try{lastEl.style.removeProperty('outline')}catch(e){}lastEl=el;if(!el)return;try{if(on)el.style.setProperty('outline','3px solid #00e5ff','important');else el.style.removeProperty('outline')}catch(e){}}
+function onMove(e){if(!armed)return;var el=e.target;if(!el||el===btn)return;mark(el,true)}
+function onClick(e){if(!armed)return;if(e.target===btn)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();var el=e.target;armed=false;if(btn)btn.textContent='UFC PROBE';mark(el,false);setTimeout(function(){probe(el)},0)}
+function ensure(){if(btn||!D.documentElement)return;btn=D.createElement('button');btn.textContent='UFC PROBE';btn.type='button';btn.style.cssText='position:fixed;right:10px;bottom:10px;z-index:2147483647;padding:8px 10px;border:0;border-radius:8px;background:#111;color:#fff;font:12px/1.2 monospace;box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer';btn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();armed=!armed;btn.textContent=armed?'CLICK TARGET':'UFC PROBE';if(!armed)mark(lastEl,false)});(D.body||D.documentElement).appendChild(btn)}
+D.addEventListener('mousemove',onMove,true);D.addEventListener('click',onClick,true);if(D.readyState==='loading')D.addEventListener('DOMContentLoaded',ensure,{once:true});else ensure();setTimeout(ensure,1000);
+})();
