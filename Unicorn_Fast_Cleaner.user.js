@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Unicorn Fast Cleaner Lite
 // @namespace    local.unicorn.fastcleaner
-// @version      1.5.12
+// @version      1.5.13
 // @description  Conservative structural banner/popup cleanup and preroll skip for Unicorn Pro
 // @match        http://*/*
 // @match        https://*/*
@@ -128,8 +128,33 @@ function dominantBannerMedia(a) {
   }
   return false;
 }
+function directoryContentCard(a) {
+  if (!a || !a.closest) return false;
+  try {
+    // Ranking / directory cards often use same-site /go links and wide logo art.
+    // Those are normal content, not banner ads. Require the repeated card-grid
+    // structure so this does not become a broad ad exemption.
+    var item = a.closest('.group-card-item,[class*="rank-card" i],[class*="site-card" i]');
+    if (!item) return false;
+    var grid = item.closest('.top10-grid,[class*="ranking-grid" i],[class*="rank-grid" i],[class*="site-grid" i]');
+    if (!grid) return false;
+
+    if (item.matches && item.matches('.group-card-item') && item.closest('.group-card') && item.closest('.top10-grid')) return true;
+
+    var parent = item.parentElement;
+    if (!parent || !parent.children || parent.children.length < 4) return false;
+    var peers = 0;
+    for (var i = 0; i < parent.children.length && i < 24; i++) {
+      var ch = parent.children[i];
+      var cm = ((ch.id || '') + ' ' + String(ch.className || '')).toLowerCase();
+      if (/group-card-item|rank-card|site-card/.test(cm)) peers++;
+    }
+    return peers >= 4;
+  } catch (e) { return false; }
+}
 function redirectAdShell(a) {
   if (!a || !sameSiteAdRedirect(a) || protectedZone(a) || isPlayer(a)) return null;
+  if (directoryContentCard(a)) return null;
 
   // A same-site /go or /redirect URL is not enough by itself.
   // Many link directories use those routes for normal content cards.
